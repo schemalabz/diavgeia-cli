@@ -94,6 +94,78 @@ for await (const d of client.searchAll({ org: '6104' })) {
 diavgeia search query --org 6104 --from 2024-01-01 --to 2024-12-31 --all
 ```
 
+## Download decision PDFs
+
+```typescript
+import { writeFileSync } from 'node:fs';
+
+const { buffer } = await client.downloadDocument('ΨΘ82ΩΡΦ-7ΑΙ');
+writeFileSync('ΨΘ82ΩΡΦ-7ΑΙ.pdf', Buffer.from(buffer));
+```
+
+**CLI:**
+
+```bash
+# Download a single PDF
+diavgeia decisions download ΨΘ82ΩΡΦ-7ΑΙ
+
+# Download multiple PDFs to a directory, skipping already downloaded
+diavgeia decisions download ΨΘ82ΩΡΦ-7ΑΙ Ψ123ΩΡΦ-ΑΒΓ -o ./pdfs --skip-existing
+```
+
+## Search by subject words
+
+Use `--subject-words` for tokenized AND-matching. Unlike `--subject` (exact phrase), this finds decisions where all words appear in the subject independently, including word variations:
+
+```typescript
+const results = await client.searchAdvanced({
+  q: 'subject:"δαπάνη" AND subject:"προμήθεια" AND organizationUid:"6104"',
+});
+```
+
+**CLI:**
+
+```bash
+# Finds decisions with both words in the subject
+diavgeia search query --subject-words "δαπάνη προμήθεια" --org 6104
+```
+
+## Search PDF content
+
+Search within the text content of decision PDFs:
+
+```typescript
+const results = await client.searchAdvanced({
+  q: 'content:"αποφασίζει" AND organizationUid:"6104"',
+});
+```
+
+**CLI:**
+
+```bash
+diavgeia search query --content "αποφασίζει" --org 6104
+```
+
+## Filter by financial amount
+
+Filter decisions by their financial amount using range queries:
+
+```typescript
+const results = await client.searchAdvanced({
+  q: 'amount:[10000 TO 50000] AND organizationUid:"6104"',
+});
+```
+
+**CLI:**
+
+```bash
+# Decisions between €10,000 and €50,000
+diavgeia search query --amount-min 10000 --amount-max 50000 --org 6104
+
+# Decisions over €100,000
+diavgeia search query --amount-min 100000 --org 6104
+```
+
 ## Get a decision PDF URL
 
 ```typescript

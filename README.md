@@ -117,6 +117,12 @@ diavgeia decisions version <version-uuid>
 
 # View version/correction history
 diavgeia decisions history ΨΘ82ΩΡΦ-7ΑΙ
+
+# Download decision PDFs
+diavgeia decisions download ΨΘ82ΩΡΦ-7ΑΙ
+
+# Download multiple PDFs to a directory, skipping already downloaded
+diavgeia decisions download ΨΘ82ΩΡΦ-7ΑΙ Ψ123ΩΡΦ-ΑΒΓ -o ./pdfs --skip-existing
 ```
 
 ### Search
@@ -128,8 +134,20 @@ diavgeia search query --org 6104 --unit 81689 --from 2024-12-01 --to 2024-12-31
 # Free-text search
 diavgeia search query --query "προϋπολογισμού" --org 6104
 
+# Search by subject words (tokenized AND-matching, finds word variations)
+diavgeia search query --subject-words "δαπάνη προμήθεια" --org 6104
+
+# Search within PDF content
+diavgeia search query --content "αποφασίζει" --org 6104
+
+# Filter by financial amount range
+diavgeia search query --amount-min 10000 --amount-max 50000 --org 6104
+
 # Fetch ALL results (paginates automatically)
 diavgeia search query --org 6104 --from 2024-01-01 --to 2024-12-31 --all
+
+# Wide date ranges are auto-split into 180-day windows; disable with:
+diavgeia search query --org 6104 --from 2020-01-01 --to 2024-12-31 --all --no-window
 
 # Advanced search with Lucene syntax
 diavgeia search advanced 'organizationUid:"6104" AND issueDate:[DT(2024-01-01T00:00:00) TO DT(2024-12-31T23:59:59)]'
@@ -177,6 +195,7 @@ diavgeia signers get 100009559
 | `decision(ada)` | Get decision by ADA |
 | `decisionVersion(versionId)` | Get specific version |
 | `versionLog(ada)` | Decision version history |
+| `downloadDocument(ada)` | Download decision PDF (returns ArrayBuffer + checksum) |
 | `search(params)` | Search with named parameters |
 | `searchAdvanced(params)` | Search with Lucene syntax |
 | `searchAll(params)` | Async iterable over all pages |
