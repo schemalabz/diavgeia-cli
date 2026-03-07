@@ -4,6 +4,42 @@ import type { SearchParams, Decision } from '../../types.js';
 import { output, formatSearchResults, shouldJson, handleError } from './output.js';
 import { msToISODate } from '../../utils.js';
 
+/**
+ * Split a date range into non-overlapping windows of at most maxDays.
+ * Input dates are YYYY-MM-DD strings.
+ */
+export function computeWindows(from: string, to: string, maxDays = 180): Array<{ from: string; to: string }> {
+  const start = new Date(from + 'T00:00:00Z');
+  const end = new Date(to + 'T00:00:00Z');
+
+  if (end <= start) {
+    return [{ from, to }];
+  }
+
+  const windows: Array<{ from: string; to: string }> = [];
+  let current = start;
+
+  while (current <= end) {
+    const windowEnd = new Date(current.getTime() + maxDays * 24 * 60 * 60 * 1000);
+    const actualEnd = windowEnd < end ? windowEnd : end;
+
+    windows.push({
+      from: current.toISOString().split('T')[0],
+      to: actualEnd.toISOString().split('T')[0],
+    });
+
+    current = new Date(actualEnd.getTime() + 24 * 60 * 60 * 1000); // next day after window end
+  }
+
+  return windows;
+}
+
+function daysBetween(from: string, to: string): number {
+  const start = new Date(from + 'T00:00:00Z');
+  const end = new Date(to + 'T00:00:00Z');
+  return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+}
+
 export function registerSearchCommand(program: Command, client: Diavgeia): void {
   const search = program
     .command('search')
@@ -28,6 +64,7 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
     .option('--size <n>', 'Results per page (max 500)', '50')
     .option('--page <n>', 'Page number (0-indexed)', '0')
     .option('--all', 'Fetch all pages (streams results)')
+    .option('--no-window', 'Disable auto-windowing for wide date ranges')
     .action(async (opts) => {
       try {
         const params: SearchParams = {
@@ -48,7 +85,43 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
           page: parseInt(opts.page, 10),
         };
 
-        if (opts.all) {
+        const needsWindowing = opts.window && opts.from && opts.to && daysBetween(opts.from, opts.to) > 180;
+
+        if (needsWindowing) {
+          const windows = computeWindows(opts.from, opts.to);
+          const all: Decision[] = [];
+
+          for (const win of windows) {
+            if (process.stderr.isTTY) {
+              process.stderr.write(`Searching ${win.from} to ${win.to}...`);
+            }
+
+            const windowParams = { ...params, from_issue_date: win.from, to_issue_date: win.to };
+
+            if (opts.all) {
+              const { page: _, ...rest } = windowParams;
+              for await (const decision of client.searchAll(rest)) {
+                all.push(decision);
+              }
+            } else {
+              const result = await client.search(windowParams);
+              all.push(...result.decisions);
+            }
+
+            if (process.stderr.isTTY) {
+              process.stderr.write(` (${all.length} results so far)\n`);
+            }
+          }
+
+          if (shouldJson()) {
+            console.log(JSON.stringify(all, null, 2));
+          } else {
+            for (const d of all) {
+              console.log(`${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
+            }
+            console.log(`\n${all.length} total results`);
+          }
+        } else if (opts.all) {
           await streamAll(client, params);
         } else {
           const result = await client.search(params);
