@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Diavgeia } from '../client.js';
 import { normalizeGreek } from '../utils.js';
+import { buildAdvancedQuery } from './commands/search.js';
 import type { Decision, SearchResponse } from '../types.js';
 
 const SMOKE = Boolean(process.env.SMOKE);
@@ -40,9 +41,8 @@ describe.skipIf(!SMOKE)('Smoke: search query', () => {
   }, 30_000);
 
   it('finds decisions by tokenized subject words via advanced search', async () => {
-    // --subject-words uses searchAdvanced with Lucene query
-    // Note: the API requires quoted values for subject terms
-    const q = `subject:"ΕΓΚΡΙΣΗ" AND subject:"ΔΑΠΑΝΗΣ" AND organizationUid:"${ORG}"`;
+    // Uses the same buildAdvancedQuery the CLI uses for --subject-words
+    const q = buildAdvancedQuery({ subjectWords: 'ΕΓΚΡΙΣΗ ΔΑΠΑΝΗΣ', org: ORG })!;
     const result = await client.searchAdvanced({ q, size: 5 });
 
     expect(result.decisions.length).toBeGreaterThan(0);
@@ -55,7 +55,7 @@ describe.skipIf(!SMOKE)('Smoke: search query', () => {
   }, 30_000);
 
   it('searches within PDF content via advanced search', async () => {
-    const q = `content:"δικαστική" AND organizationUid:"${ORG}"`;
+    const q = buildAdvancedQuery({ content: 'δικαστική', org: ORG })!;
     const result = await client.searchAdvanced({ q, size: 5 });
 
     // Content search should return results (can't verify PDF text from API response)
@@ -66,8 +66,7 @@ describe.skipIf(!SMOKE)('Smoke: search query', () => {
   }, 30_000);
 
   it('filters by financial amount via advanced search', async () => {
-    // Note: the API uses "amount" (not "financialAmount") and does not support wildcard bounds
-    const q = `amount:[10000 TO 999999999] AND organizationUid:"${ORG}"`;
+    const q = buildAdvancedQuery({ amountMin: '10000', org: ORG })!;
     const result = await client.searchAdvanced({ q, size: 5 });
 
     expect(result.decisions.length).toBeGreaterThan(0);

@@ -41,8 +41,8 @@ export function computeWindows(from: string, to: string, maxDays = 180): Array<{
 export function buildSubjectWordsQuery(text: string): string {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length === 0) return '';
-  if (words.length === 1) return `subject:${words[0]}`;
-  return words.map((w) => `subject:${w}`).join(' AND ');
+  if (words.length === 1) return `subject:"${words[0]}"`;
+  return words.map((w) => `subject:"${w}"`).join(' AND ');
 }
 
 export interface AdvancedQueryOpts {
@@ -74,11 +74,11 @@ export function buildAdvancedQuery(opts: AdvancedQueryOpts): string | null {
   }
 
   if (opts.amountMin != null && opts.amountMax != null) {
-    parts.push(`financialAmount:[${opts.amountMin} TO ${opts.amountMax}]`);
+    parts.push(`amount:[${opts.amountMin} TO ${opts.amountMax}]`);
   } else if (opts.amountMin != null) {
-    parts.push(`financialAmount:[${opts.amountMin} TO *]`);
+    parts.push(`amount:[${opts.amountMin} TO 999999999]`);
   } else if (opts.amountMax != null) {
-    parts.push(`financialAmount:[* TO ${opts.amountMax}]`);
+    parts.push(`amount:[0 TO ${opts.amountMax}]`);
   }
 
   // If no advanced-specific flags were used, return null

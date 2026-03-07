@@ -60,19 +60,19 @@ describe('computeWindows', () => {
 });
 
 describe('buildSubjectWordsQuery', () => {
-  it('single word returns subject:word', () => {
-    expect(buildSubjectWordsQuery('ΕΓΚΡΙΣΗ')).toBe('subject:ΕΓΚΡΙΣΗ');
+  it('single word returns quoted subject:word', () => {
+    expect(buildSubjectWordsQuery('ΕΓΚΡΙΣΗ')).toBe('subject:"ΕΓΚΡΙΣΗ"');
   });
 
-  it('multiple words are AND-joined', () => {
+  it('multiple words are AND-joined with quotes', () => {
     expect(buildSubjectWordsQuery('ΕΓΚΡΙΣΗ ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ')).toBe(
-      'subject:ΕΓΚΡΙΣΗ AND subject:ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ',
+      'subject:"ΕΓΚΡΙΣΗ" AND subject:"ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ"',
     );
   });
 
   it('extra whitespace is trimmed and filtered', () => {
     expect(buildSubjectWordsQuery('  ΕΓΚΡΙΣΗ   ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ  ')).toBe(
-      'subject:ΕΓΚΡΙΣΗ AND subject:ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ',
+      'subject:"ΕΓΚΡΙΣΗ" AND subject:"ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ"',
     );
   });
 
@@ -96,17 +96,17 @@ describe('buildAdvancedQuery', () => {
 
   it('builds amount range with both min and max', () => {
     const q = buildAdvancedQuery({ amountMin: '1000', amountMax: '5000' });
-    expect(q).toBe('financialAmount:[1000 TO 5000]');
+    expect(q).toBe('amount:[1000 TO 5000]');
   });
 
-  it('builds amount range with min only', () => {
+  it('builds amount range with min only (uses sentinel upper bound)', () => {
     const q = buildAdvancedQuery({ amountMin: '1000' });
-    expect(q).toBe('financialAmount:[1000 TO *]');
+    expect(q).toBe('amount:[1000 TO 999999999]');
   });
 
-  it('builds amount range with max only', () => {
+  it('builds amount range with max only (uses zero lower bound)', () => {
     const q = buildAdvancedQuery({ amountMax: '5000' });
-    expect(q).toBe('financialAmount:[* TO 5000]');
+    expect(q).toBe('amount:[0 TO 5000]');
   });
 
   it('combines multiple advanced flags with AND', () => {
@@ -115,9 +115,9 @@ describe('buildAdvancedQuery', () => {
       content: 'δικαστική',
       amountMin: '1000',
     });
-    expect(q).toContain('subject:ΕΓΚΡΙΣΗ AND subject:ΔΑΠΑΝΗΣ');
+    expect(q).toContain('subject:"ΕΓΚΡΙΣΗ" AND subject:"ΔΑΠΑΝΗΣ"');
     expect(q).toContain('content:"δικαστική"');
-    expect(q).toContain('financialAmount:[1000 TO *]');
+    expect(q).toContain('amount:[1000 TO 999999999]');
     // All parts joined with AND
     expect(q!.split(' AND ').length).toBe(4);
   });
