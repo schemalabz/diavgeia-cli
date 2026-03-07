@@ -147,6 +147,17 @@ export class Diavgeia {
     return data.versions;
   }
 
+  async downloadDocument(ada: string): Promise<{ buffer: ArrayBuffer; checksum: string | null }> {
+    const decision = await this.decision(ada);
+    const response = await this._fetch(decision.documentUrl, {
+      signal: AbortSignal.timeout(this.timeout),
+    });
+    if (!response.ok) {
+      throw new DiavgeiaError(response.status, response.statusText, decision.documentUrl);
+    }
+    return { buffer: await response.arrayBuffer(), checksum: decision.documentChecksum };
+  }
+
   // --- Search ---
 
   async search(params: SearchParams): Promise<SearchResponse> {

@@ -194,6 +194,40 @@ describe('Diavgeia client', () => {
     });
   });
 
+  // --- Download ---
+
+  describe('downloadDocument', () => {
+    it('fetches decision then downloads documentUrl', async () => {
+      const decision = makeDecision({ documentUrl: 'https://diavgeia.gov.gr/doc/TEST-ADA', documentChecksum: 'abc123' });
+      const docBuffer = new ArrayBuffer(8);
+      fetchMock
+        .mockReturnValueOnce(ok(decision))
+        .mockReturnValueOnce(Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          arrayBuffer: () => Promise.resolve(docBuffer),
+        } as Response));
+
+      const result = await client.downloadDocument('TEST-ADA');
+      expect(result.buffer).toBe(docBuffer);
+      expect(result.checksum).toBe('abc123');
+      expect(fetchMock.mock.calls[1][0]).toBe('https://diavgeia.gov.gr/doc/TEST-ADA');
+    });
+
+    it('throws on non-OK download response', async () => {
+      fetchMock
+        .mockReturnValueOnce(ok(makeDecision()))
+        .mockReturnValueOnce(Promise.resolve({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        } as Response));
+
+      await expect(client.downloadDocument('TEST-ADA')).rejects.toThrow(DiavgeiaError);
+    });
+  });
+
   // --- Search ---
 
   describe('search', () => {
