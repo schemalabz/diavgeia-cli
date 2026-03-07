@@ -100,31 +100,36 @@ src/
 **Manual smoke tests — run after significant changes:**
 
 ```bash
-# Build first
-nix develop --command bash -c 'npm run build'
+# Enter dev shell and build first
+nix develop
+npm run build
 
-# 1. Download command — real filesystem + API
-node dist/cli/index.js decisions download <known-ada> -o /tmp/test-dl
+# 1. Search with type column visible
+node dist/cli/index.js search query --org 6104 --size 5
+
+# 2. Decision detail with extra fields (pick an ADA from search results)
+node dist/cli/index.js decisions get <ada-from-above>
+# Should show "Extra fields:" section with FEK, amounts, etc.
+
+# 3. Download command — real filesystem + API
+node dist/cli/index.js decisions download <ada-from-above> -o /tmp/test-dl
 ls -la /tmp/test-dl/  # verify PDF exists and is non-empty
-node dist/cli/index.js decisions download <known-ada> -o /tmp/test-dl --skip-existing  # should skip
+node dist/cli/index.js decisions download <ada-from-above> -o /tmp/test-dl --skip-existing  # should skip
 
-# 2. Search with windowing — real API pagination
+# 4. Search with windowing — real API pagination
 node dist/cli/index.js search query --org 6104 --from 2023-01-01 --to 2024-12-31 --size 5
 # Should show "Searching X to Y..." progress on TTY, multiple windows
 
-# 3. Subject words — advanced endpoint
+# 5. Subject words — advanced endpoint
 node dist/cli/index.js search query --subject-words "ΕΓΚΡΙΣΗ ΔΑΠΑΝΗΣ" --org 6104 --size 5
 
-# 4. Content search — PDF full-text
+# 6. Content search — PDF full-text
 node dist/cli/index.js search query --content "δικαστική" --org 6104 --size 5
 
-# 5. Amount filter
+# 7. Amount filter
 node dist/cli/index.js search query --org 6104 --amount-min 10000 --size 5
 
-# 6. Decision detail with extra fields
-node dist/cli/index.js decisions get <known-ada>  # should show Extra fields section
-
-# 7. JSON output
+# 8. JSON output
 node dist/cli/index.js --json search query --org 6104 --size 2  # valid JSON with decisionTypeId
 ```
 
