@@ -11,6 +11,7 @@ nix develop           # enter dev shell (node, npm)
 npm install           # install dependencies
 npm run typecheck     # tsc --noEmit
 npm test              # vitest (unit tests)
+npm run test:smoke    # integration tests against live API
 npm run build         # tsup → dist/ (ESM, CJS, types, CLI)
 ```
 
@@ -76,6 +77,12 @@ src/
 - `search advanced <query>` — Raw Lucene query
 - `search terms` — List searchable fields
 
+## Testing philosophy
+
+- **Smoke tests are the source of truth.** If a smoke test against the live API fails, the code is wrong — fix the code, not the test. Unit tests verify internal logic; smoke tests verify the system actually works.
+- **Smoke tests should exercise real code paths.** Use the same functions the CLI uses (e.g., `buildAdvancedQuery`) rather than hand-crafting equivalent queries. This way bugs in shared code are caught.
+- **Fix bugs before release, not around them.** When smoke tests reveal a bug (wrong field name, bad query syntax), fix the root cause in the production code. Never paper over it with test workarounds.
+
 ## Testing patterns
 
 - Mock fetch with `vi.fn()`, use `ok(data)` / `notOk(status, text)` response factories
@@ -97,48 +104,20 @@ src/
 | Pagination | Async generator across pages | `paginate.test.ts` |
 | Utils | Date conversion, Greek normalization, URL building | `utils.test.ts` |
 
-**Manual smoke tests — run after significant changes:**
+**Integration smoke tests (`npm run test:smoke`) — run after significant changes:**
 
-```bash
-# Enter dev shell and build first
-nix develop
-npm run build
+| Area | What's covered | Test file |
+|------|---------------|-----------|
+| Search API | Basic search, JSON round-trip, subject-words, content, amount filters | `cli/smoke.integration.test.ts` |
+| Decision API | Fetch detail with all fields, download PDF, skip-existing logic | `cli/smoke.integration.test.ts` |
+| Advanced search | Raw Lucene queries against live API | `cli/smoke.integration.test.ts` |
+| Pagination | `searchAll()` async iterator across real pages | `cli/smoke.integration.test.ts` |
 
-# 1. Search with type column visible
-node dist/cli/index.js search query --org 6104 --size 5
+These tests hit the live Diavgeia API (no mocks) and are skipped by default. Run with `SMOKE=1 npm test` or `npm run test:smoke`.
 
-# 2. Decision detail with extra fields (pick an ADA from search results)
-node dist/cli/index.js decisions get <ada-from-above>
-# Should show "Extra fields:" section with FEK, amounts, etc.
-
-# 3. Download command — real filesystem + API
-node dist/cli/index.js decisions download <ada-from-above> -o /tmp/test-dl
-ls -la /tmp/test-dl/  # verify PDF exists and is non-empty
-node dist/cli/index.js decisions download <ada-from-above> -o /tmp/test-dl --skip-existing  # should skip
-
-# 4. Search with windowing — real API pagination
-node dist/cli/index.js search query --org 6104 --from 2023-01-01 --to 2024-12-31 --size 5
-# Should show "Searching X to Y..." progress on TTY, multiple windows
-
-# 5. Subject words — advanced endpoint
-node dist/cli/index.js search query --subject-words "ΕΓΚΡΙΣΗ ΔΑΠΑΝΗΣ" --org 6104 --size 5
-
-# 6. Content search — PDF full-text
-node dist/cli/index.js search query --content "δικαστική" --org 6104 --size 5
-
-# 7. Amount filter
-node dist/cli/index.js search query --org 6104 --amount-min 10000 --size 5
-
-# 8. JSON output
-node dist/cli/index.js --json search query --org 6104 --size 2  # valid JSON with decisionTypeId
-```
-
-**Not testable automatically (by design):**
+**Manual verification only (not automatable):**
 - TTY progress output (stderr writes gated by `process.stderr.isTTY`)
-- Real API responses, network errors, timeouts
-- Actual filesystem I/O (tests mock `node:fs`)
 - Terminal rendering (Greek chars, column alignment, line wrapping)
-- Lucene query validation (only the real API can reject bad syntax)
 
 ## API reference
 
