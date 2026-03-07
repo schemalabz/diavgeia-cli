@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeWindows } from './search.js';
+import { computeWindows, buildSubjectWordsQuery } from './search.js';
 
 describe('computeWindows', () => {
   it('returns single window for exactly 180 days', () => {
@@ -56,5 +56,28 @@ describe('computeWindows', () => {
     // 30-day windows over 90 days = 3 windows
     const windows = computeWindows('2024-01-01', '2024-03-31', 30);
     expect(windows).toHaveLength(3);
+  });
+});
+
+describe('buildSubjectWordsQuery', () => {
+  it('single word returns subject:word', () => {
+    expect(buildSubjectWordsQuery('ΕΓΚΡΙΣΗ')).toBe('subject:ΕΓΚΡΙΣΗ');
+  });
+
+  it('multiple words are AND-joined', () => {
+    expect(buildSubjectWordsQuery('ΕΓΚΡΙΣΗ ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ')).toBe(
+      'subject:ΕΓΚΡΙΣΗ AND subject:ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ',
+    );
+  });
+
+  it('extra whitespace is trimmed and filtered', () => {
+    expect(buildSubjectWordsQuery('  ΕΓΚΡΙΣΗ   ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ  ')).toBe(
+      'subject:ΕΓΚΡΙΣΗ AND subject:ΠΡΟΫΠΟΛΟΓΙΣΜΟΥ',
+    );
+  });
+
+  it('empty string returns empty', () => {
+    expect(buildSubjectWordsQuery('')).toBe('');
+    expect(buildSubjectWordsQuery('   ')).toBe('');
   });
 });

@@ -34,6 +34,17 @@ export function computeWindows(from: string, to: string, maxDays = 180): Array<{
   return windows;
 }
 
+/**
+ * Build a Lucene query for tokenized subject matching.
+ * Each word is AND-joined: "word1 word2" → "subject:word1 AND subject:word2"
+ */
+export function buildSubjectWordsQuery(text: string): string {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  if (words.length === 1) return `subject:${words[0]}`;
+  return words.map((w) => `subject:${w}`).join(' AND ');
+}
+
 function daysBetween(from: string, to: string): number {
   const start = new Date(from + 'T00:00:00Z');
   const end = new Date(to + 'T00:00:00Z');
@@ -55,7 +66,8 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
     .option('--status <status>', 'Decision status (e.g. PUBLISHED)')
     .option('--type <typeId>', 'Decision type UID')
     .option('--query <text>', 'Free-text keyword search')
-    .option('--subject <text>', 'Search by subject text')
+    .option('--subject <text>', 'Search by subject text (exact phrase)')
+    .option('--subject-words <text>', 'Search by subject words (AND-joined, tokenized)')
     .option('--ada <ada>', 'Search by specific ADA')
     .option('--protocol <number>', 'Search by protocol number')
     .option('--signer <signerId>', 'Filter by signer UID')
@@ -67,6 +79,43 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
     .option('--no-window', 'Disable auto-windowing for wide date ranges')
     .action(async (opts) => {
       try {
+        if (opts.subject && opts.subjectWords) {
+          console.error('Error: --subject and --subject-words cannot be used together');
+          process.exit(1);
+        }
+
+        // When --subject-words is used, route through searchAdvanced
+        const subjectWordsQuery = opts.subjectWords ? buildSubjectWordsQuery(opts.subjectWords) : null;
+
+        if (subjectWordsQuery) {
+          const parts: string[] = [subjectWordsQuery];
+          if (opts.org) parts.push(`organizationUid:"${opts.org}"`);
+          if (opts.type) parts.push(`decisionTypeUid:"${opts.type}"`);
+          if (opts.from && opts.to) {
+            parts.push(`issueDate:[${opts.from} TO ${opts.to}]`);
+          } else if (opts.from) {
+            parts.push(`issueDate:[${opts.from} TO *]`);
+          } else if (opts.to) {
+            parts.push(`issueDate:[* TO ${opts.to}]`);
+          }
+          if (opts.status) parts.push(`status:"${opts.status}"`);
+
+          const q = parts.join(' AND ');
+          const size = parseInt(opts.size, 10);
+          const page = parseInt(opts.page, 10);
+
+          if (opts.all) {
+            await streamAdvancedAll(client, q, size);
+          } else {
+            const result = await client.searchAdvanced({ q, page, size });
+            output(result, (data) => {
+              const r = data as typeof result;
+              return formatSearchResults(r.decisions, r.info.total, r.info.page);
+            });
+          }
+          return;
+        }
+
         const params: SearchParams = {
           org: opts.org,
           unit: opts.unit,
@@ -196,6 +245,28 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
         handleError(err);
       }
     });
+}
+
+async function streamAdvancedAll(client: Diavgeia, q: string, size: number): Promise<void> {
+  let page = 0;
+  const all: Decision[] = [];
+
+  while (true) {
+    const result = await client.searchAdvanced({ q, page, size });
+    all.push(...result.decisions);
+    const totalPages = Math.ceil(result.info.total / size);
+    if (page >= totalPages - 1 || result.decisions.length === 0) break;
+    page++;
+  }
+
+  if (shouldJson()) {
+    console.log(JSON.stringify(all, null, 2));
+  } else {
+    for (const d of all) {
+      console.log(`${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
+    }
+    console.log(`\n${all.length} total results`);
+  }
 }
 
 async function streamAll(client: Diavgeia, params: SearchParams): Promise<void> {
