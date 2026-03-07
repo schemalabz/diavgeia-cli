@@ -45,6 +45,60 @@ export function buildSubjectWordsQuery(text: string): string {
   return words.map((w) => `subject:${w}`).join(' AND ');
 }
 
+export interface AdvancedQueryOpts {
+  subjectWords?: string;
+  content?: string;
+  amountMin?: string;
+  amountMax?: string;
+  org?: string;
+  type?: string;
+  from?: string;
+  to?: string;
+  status?: string;
+}
+
+/**
+ * Build a Lucene query from convenience flags.
+ * Returns null if no advanced flags are present.
+ */
+export function buildAdvancedQuery(opts: AdvancedQueryOpts): string | null {
+  const parts: string[] = [];
+
+  if (opts.subjectWords) {
+    const q = buildSubjectWordsQuery(opts.subjectWords);
+    if (q) parts.push(q);
+  }
+
+  if (opts.content) {
+    parts.push(`content:"${opts.content}"`);
+  }
+
+  if (opts.amountMin != null && opts.amountMax != null) {
+    parts.push(`financialAmount:[${opts.amountMin} TO ${opts.amountMax}]`);
+  } else if (opts.amountMin != null) {
+    parts.push(`financialAmount:[${opts.amountMin} TO *]`);
+  } else if (opts.amountMax != null) {
+    parts.push(`financialAmount:[* TO ${opts.amountMax}]`);
+  }
+
+  // If no advanced-specific flags were used, return null
+  if (parts.length === 0) return null;
+
+  // Translate common flags to Lucene equivalents
+  if (opts.org) parts.push(`organizationUid:"${opts.org}"`);
+  if (opts.type) parts.push(`decisionTypeUid:"${opts.type}"`);
+  if (opts.from && opts.to) {
+    parts.push(`issueDate:[${opts.from} TO ${opts.to}]`);
+  } else if (opts.from) {
+    parts.push(`issueDate:[${opts.from} TO *]`);
+  } else if (opts.to) {
+    parts.push(`issueDate:[* TO ${opts.to}]`);
+  }
+  if (opts.status) parts.push(`status:"${opts.status}"`);
+
+  return parts.join(' AND ');
+}
+
 function daysBetween(from: string, to: string): number {
   const start = new Date(from + 'T00:00:00Z');
   const end = new Date(to + 'T00:00:00Z');
@@ -68,6 +122,9 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
     .option('--query <text>', 'Free-text keyword search')
     .option('--subject <text>', 'Search by subject text (exact phrase)')
     .option('--subject-words <text>', 'Search by subject words (AND-joined, tokenized)')
+    .option('--content <text>', 'Search within document content (PDF text)')
+    .option('--amount-min <n>', 'Minimum financial amount')
+    .option('--amount-max <n>', 'Maximum financial amount')
     .option('--ada <ada>', 'Search by specific ADA')
     .option('--protocol <number>', 'Search by protocol number')
     .option('--signer <signerId>', 'Filter by signer UID')
@@ -84,30 +141,27 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
           process.exit(1);
         }
 
-        // When --subject-words is used, route through searchAdvanced
-        const subjectWordsQuery = opts.subjectWords ? buildSubjectWordsQuery(opts.subjectWords) : null;
+        // Check if any advanced flags trigger Lucene mode
+        const advancedQuery = buildAdvancedQuery({
+          subjectWords: opts.subjectWords,
+          content: opts.content,
+          amountMin: opts.amountMin,
+          amountMax: opts.amountMax,
+          org: opts.org,
+          type: opts.type,
+          from: opts.from,
+          to: opts.to,
+          status: opts.status,
+        });
 
-        if (subjectWordsQuery) {
-          const parts: string[] = [subjectWordsQuery];
-          if (opts.org) parts.push(`organizationUid:"${opts.org}"`);
-          if (opts.type) parts.push(`decisionTypeUid:"${opts.type}"`);
-          if (opts.from && opts.to) {
-            parts.push(`issueDate:[${opts.from} TO ${opts.to}]`);
-          } else if (opts.from) {
-            parts.push(`issueDate:[${opts.from} TO *]`);
-          } else if (opts.to) {
-            parts.push(`issueDate:[* TO ${opts.to}]`);
-          }
-          if (opts.status) parts.push(`status:"${opts.status}"`);
-
-          const q = parts.join(' AND ');
+        if (advancedQuery) {
           const size = parseInt(opts.size, 10);
           const page = parseInt(opts.page, 10);
 
           if (opts.all) {
-            await streamAdvancedAll(client, q, size);
+            await streamAdvancedAll(client, advancedQuery, size);
           } else {
-            const result = await client.searchAdvanced({ q, page, size });
+            const result = await client.searchAdvanced({ q: advancedQuery, page, size });
             output(result, (data) => {
               const r = data as typeof result;
               return formatSearchResults(r.decisions, r.info.total, r.info.page);
@@ -193,27 +247,7 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
     .action(async (query: string, opts) => {
       try {
         if (opts.all) {
-          // For advanced search --all, paginate manually
-          const size = parseInt(opts.size, 10);
-          let page = 0;
-          const all: Decision[] = [];
-
-          while (true) {
-            const result = await client.searchAdvanced({ q: query, page, size });
-            all.push(...result.decisions);
-            const totalPages = Math.ceil(result.info.total / size);
-            if (page >= totalPages - 1 || result.decisions.length === 0) break;
-            page++;
-          }
-
-          if (shouldJson()) {
-            console.log(JSON.stringify(all, null, 2));
-          } else {
-            for (const d of all) {
-              console.log(`${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
-            }
-            console.log(`\n${all.length} total results`);
-          }
+          await streamAdvancedAll(client, query, parseInt(opts.size, 10));
         } else {
           const result = await client.searchAdvanced({
             q: query,

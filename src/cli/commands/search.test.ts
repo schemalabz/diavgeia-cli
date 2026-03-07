@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeWindows, buildSubjectWordsQuery } from './search.js';
+import { computeWindows, buildSubjectWordsQuery, buildAdvancedQuery } from './search.js';
 
 describe('computeWindows', () => {
   it('returns single window for exactly 180 days', () => {
@@ -79,5 +79,72 @@ describe('buildSubjectWordsQuery', () => {
   it('empty string returns empty', () => {
     expect(buildSubjectWordsQuery('')).toBe('');
     expect(buildSubjectWordsQuery('   ')).toBe('');
+  });
+});
+
+describe('buildAdvancedQuery', () => {
+  it('returns null with no advanced flags', () => {
+    expect(buildAdvancedQuery({})).toBeNull();
+    expect(buildAdvancedQuery({ org: '6104', from: '2024-01-01' })).toBeNull();
+  });
+
+  it('builds content query', () => {
+    expect(buildAdvancedQuery({ content: 'δικαστική απόφαση' })).toBe(
+      'content:"δικαστική απόφαση"',
+    );
+  });
+
+  it('builds amount range with both min and max', () => {
+    const q = buildAdvancedQuery({ amountMin: '1000', amountMax: '5000' });
+    expect(q).toBe('financialAmount:[1000 TO 5000]');
+  });
+
+  it('builds amount range with min only', () => {
+    const q = buildAdvancedQuery({ amountMin: '1000' });
+    expect(q).toBe('financialAmount:[1000 TO *]');
+  });
+
+  it('builds amount range with max only', () => {
+    const q = buildAdvancedQuery({ amountMax: '5000' });
+    expect(q).toBe('financialAmount:[* TO 5000]');
+  });
+
+  it('combines multiple advanced flags with AND', () => {
+    const q = buildAdvancedQuery({
+      subjectWords: 'ΕΓΚΡΙΣΗ ΔΑΠΑΝΗΣ',
+      content: 'δικαστική',
+      amountMin: '1000',
+    });
+    expect(q).toContain('subject:ΕΓΚΡΙΣΗ AND subject:ΔΑΠΑΝΗΣ');
+    expect(q).toContain('content:"δικαστική"');
+    expect(q).toContain('financialAmount:[1000 TO *]');
+    // All parts joined with AND
+    expect(q!.split(' AND ').length).toBe(4);
+  });
+
+  it('includes common flags as Lucene equivalents when advanced flags present', () => {
+    const q = buildAdvancedQuery({
+      content: 'test',
+      org: '6104',
+      type: 'Β.1.1',
+      from: '2024-01-01',
+      to: '2024-06-30',
+      status: 'PUBLISHED',
+    });
+    expect(q).toContain('content:"test"');
+    expect(q).toContain('organizationUid:"6104"');
+    expect(q).toContain('decisionTypeUid:"Β.1.1"');
+    expect(q).toContain('issueDate:[2024-01-01 TO 2024-06-30]');
+    expect(q).toContain('status:"PUBLISHED"');
+  });
+
+  it('handles date range with only from', () => {
+    const q = buildAdvancedQuery({ content: 'test', from: '2024-01-01' });
+    expect(q).toContain('issueDate:[2024-01-01 TO *]');
+  });
+
+  it('handles date range with only to', () => {
+    const q = buildAdvancedQuery({ content: 'test', to: '2024-06-30' });
+    expect(q).toContain('issueDate:[* TO 2024-06-30]');
   });
 });
