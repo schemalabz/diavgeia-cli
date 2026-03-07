@@ -97,13 +97,42 @@ export function formatDecision(d: Decision): string {
   if (d.correctedVersionId) {
     lines.push(`  Corrects:     ${d.correctedVersionId}`);
   }
+
+  const extra = d.extraFieldValues;
+  if (extra && Object.keys(extra).length > 0) {
+    lines.push('');
+    lines.push('  Extra fields:');
+
+    // FEK info
+    const fek = extra.fek as Record<string, unknown> | undefined;
+    if (fek && (fek.aa || fek.issue || fek.issueyear)) {
+      lines.push(`    FEK:        ${fek.aa ?? ''}/${fek.issue ?? ''}/${fek.issueyear ?? ''}`);
+    }
+
+    // Financial amount
+    if (extra.financialAmount != null && extra.financialAmount !== '') {
+      const amount = Number(extra.financialAmount);
+      const formatted = isNaN(amount) ? String(extra.financialAmount) : amount.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      lines.push(`    Amount:     ${formatted}`);
+    }
+
+    // Other extra fields
+    for (const [key, value] of Object.entries(extra)) {
+      if (key === 'fek' || key === 'financialAmount') continue;
+      if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) continue;
+      if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0) continue;
+      const display = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      lines.push(`    ${key}: ${display}`);
+    }
+  }
+
   return lines.join('\n');
 }
 
 export function formatSearchResults(decisions: Decision[], total: number, page: number): string {
   const lines = [`${total} results (page ${page}):\n`];
   for (const d of decisions) {
-    lines.push(`  ${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
+    lines.push(`  ${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${(d.decisionTypeId ?? '').padEnd(7)} ${d.subject.substring(0, 72)}`);
   }
   return lines.join('\n');
 }
