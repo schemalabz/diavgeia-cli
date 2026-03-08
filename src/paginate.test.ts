@@ -1,6 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { paginate } from './paginate.js';
 import type { Decision, SearchResponse } from './types.js';
+import { sleep } from './utils.js';
+
+vi.mock('./utils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./utils.js')>();
+  return { ...actual, sleep: vi.fn().mockResolvedValue(undefined) };
+});
 
 function makeDecision(ada: string): Decision {
   return {
@@ -115,5 +121,57 @@ describe('paginate', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].ada).toBe('A');
+  });
+
+  describe('inter-page delay', () => {
+    const sleepMock = vi.mocked(sleep);
+
+    beforeEach(() => {
+      sleepMock.mockClear();
+    });
+
+    it('does not delay on single-page result', async () => {
+      const fetchPage = vi.fn().mockResolvedValueOnce(
+        makeSearchResponse([makeDecision('A')], 1, 0, 10),
+      );
+
+      const results: Decision[] = [];
+      for await (const d of paginate(fetchPage, 10, 200)) {
+        results.push(d);
+      }
+
+      expect(results).toHaveLength(1);
+      expect(sleepMock).not.toHaveBeenCalled();
+    });
+
+    it('delays between pages with correct ms value', async () => {
+      const fetchPage = vi.fn()
+        .mockResolvedValueOnce(makeSearchResponse([makeDecision('A')], 3, 0, 1))
+        .mockResolvedValueOnce(makeSearchResponse([makeDecision('B')], 3, 1, 1))
+        .mockResolvedValueOnce(makeSearchResponse([makeDecision('C')], 3, 2, 1));
+
+      const results: Decision[] = [];
+      for await (const d of paginate(fetchPage, 1, 150)) {
+        results.push(d);
+      }
+
+      expect(results).toHaveLength(3);
+      expect(sleepMock).toHaveBeenCalledTimes(2);
+      expect(sleepMock).toHaveBeenCalledWith(150);
+    });
+
+    it('does not delay when delay=0', async () => {
+      const fetchPage = vi.fn()
+        .mockResolvedValueOnce(makeSearchResponse([makeDecision('A')], 2, 0, 1))
+        .mockResolvedValueOnce(makeSearchResponse([makeDecision('B')], 2, 1, 1));
+
+      const results: Decision[] = [];
+      for await (const d of paginate(fetchPage, 1, 0)) {
+        results.push(d);
+      }
+
+      expect(results).toHaveLength(2);
+      expect(sleepMock).not.toHaveBeenCalled();
+    });
   });
 });

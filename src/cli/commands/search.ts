@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import type { Diavgeia } from '../../client.js';
 import type { SearchParams, Decision } from '../../types.js';
 import { output, formatSearchResults, shouldJson, handleError } from './output.js';
-import { msToISODate } from '../../utils.js';
+import { msToISODate, sleep } from '../../utils.js';
 
 /**
  * Split a date range into non-overlapping windows of at most maxDays.
@@ -291,6 +291,7 @@ async function streamAdvancedAll(client: Diavgeia, q: string, size: number): Pro
     const totalPages = Math.ceil(result.info.total / size);
     if (page >= totalPages - 1 || result.decisions.length === 0) break;
     page++;
+    await sleep(200);
   }
 
   if (shouldJson()) {

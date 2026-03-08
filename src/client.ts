@@ -30,6 +30,8 @@ export interface DiavgeiaConfig {
   fetch?: typeof globalThis.fetch;
   /** Number of retries for transient errors (default 3, 0 to disable) */
   retries?: number;
+  /** Delay in ms between paginated requests (default 200, 0 to disable) */
+  pageDelay?: number;
 }
 
 /**
@@ -44,12 +46,14 @@ export class Diavgeia {
   private readonly timeout: number;
   private readonly _fetch: typeof globalThis.fetch;
   private readonly retries: number;
+  private readonly pageDelay: number;
 
   constructor(config?: DiavgeiaConfig) {
     this.baseUrl = config?.baseUrl ?? DEFAULT_BASE_URL;
     this.timeout = config?.timeout ?? DEFAULT_TIMEOUT;
     this._fetch = config?.fetch ?? globalThis.fetch;
     this.retries = config?.retries ?? DEFAULT_RETRIES;
+    this.pageDelay = config?.pageDelay ?? 200;
   }
 
   // --- Internal helpers ---
@@ -216,6 +220,7 @@ export class Diavgeia {
     return paginate(
       (page) => this.search({ ...params, page, size }),
       size,
+      this.pageDelay,
     );
   }
 
