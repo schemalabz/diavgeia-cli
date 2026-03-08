@@ -134,17 +134,17 @@ describe('buildAdvancedQuery', () => {
     expect(q).toContain('content:"test"');
     expect(q).toContain('organizationUid:"6104"');
     expect(q).toContain('decisionTypeUid:"Β.1.1"');
-    expect(q).toContain('issueDate:[2024-01-01 TO 2024-06-30]');
+    expect(q).toContain('issueDate:[DT(2024-01-01T00:00:00) TO DT(2024-06-30T23:59:59)]');
     expect(q).toContain('status:"PUBLISHED"');
   });
 
   it('handles date range with only from', () => {
     const q = buildAdvancedQuery({ content: 'test', from: '2024-01-01' });
-    expect(q).toContain('issueDate:[2024-01-01 TO *]');
+    expect(q).toContain('issueDate:[DT(2024-01-01T00:00:00) TO *]');
   });
 
   it('handles date range with only to', () => {
     const q = buildAdvancedQuery({ content: 'test', to: '2024-06-30' });
-    expect(q).toContain('issueDate:[* TO 2024-06-30]');
+    expect(q).toContain('issueDate:[* TO DT(2024-06-30T23:59:59)]');
   });
 });

@@ -88,11 +88,11 @@ export function buildAdvancedQuery(opts: AdvancedQueryOpts): string | null {
   if (opts.org) parts.push(`organizationUid:"${opts.org}"`);
   if (opts.type) parts.push(`decisionTypeUid:"${opts.type}"`);
   if (opts.from && opts.to) {
-    parts.push(`issueDate:[${opts.from} TO ${opts.to}]`);
+    parts.push(`issueDate:[DT(${opts.from}T00:00:00) TO DT(${opts.to}T23:59:59)]`);
   } else if (opts.from) {
-    parts.push(`issueDate:[${opts.from} TO *]`);
+    parts.push(`issueDate:[DT(${opts.from}T00:00:00) TO *]`);
   } else if (opts.to) {
-    parts.push(`issueDate:[* TO ${opts.to}]`);
+    parts.push(`issueDate:[* TO DT(${opts.to}T23:59:59)]`);
   }
   if (opts.status) parts.push(`status:"${opts.status}"`);
 
@@ -157,8 +157,57 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
         if (advancedQuery) {
           const size = parseInt(opts.size, 10);
           const page = parseInt(opts.page, 10);
+          const needsAdvancedWindowing = opts.window && opts.from && opts.to && daysBetween(opts.from, opts.to) > 180;
 
-          if (opts.all) {
+          if (needsAdvancedWindowing) {
+            // Build query WITHOUT dates, then add dates per-window
+            const baseQuery = buildAdvancedQuery({
+              subjectWords: opts.subjectWords,
+              content: opts.content,
+              amountMin: opts.amountMin,
+              amountMax: opts.amountMax,
+              org: opts.org,
+              type: opts.type,
+              status: opts.status,
+            })!;
+            const windows = computeWindows(opts.from, opts.to);
+            const all: Decision[] = [];
+
+            for (const win of windows) {
+              if (process.stderr.isTTY) {
+                process.stderr.write(`Searching ${win.from} to ${win.to}...`);
+              }
+              const windowQuery = `${baseQuery} AND issueDate:[DT(${win.from}T00:00:00) TO DT(${win.to}T23:59:59)]`;
+
+              if (opts.all) {
+                let windowPage = 0;
+                while (true) {
+                  const result = await client.searchAdvanced({ q: windowQuery, page: windowPage, size });
+                  all.push(...result.decisions);
+                  const totalPages = Math.ceil(result.info.total / size);
+                  if (windowPage >= totalPages - 1 || result.decisions.length === 0) break;
+                  windowPage++;
+                  await sleep(200);
+                }
+              } else {
+                const result = await client.searchAdvanced({ q: windowQuery, page, size });
+                all.push(...result.decisions);
+              }
+
+              if (process.stderr.isTTY) {
+                process.stderr.write(` (${all.length} results so far)\n`);
+              }
+            }
+
+            if (shouldJson()) {
+              console.log(JSON.stringify(all, null, 2));
+            } else {
+              for (const d of all) {
+                console.log(`${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
+              }
+              console.log(`\n${all.length} total results`);
+            }
+          } else if (opts.all) {
             await streamAdvancedAll(client, advancedQuery, size);
           } else {
             const result = await client.searchAdvanced({ q: advancedQuery, page, size });
