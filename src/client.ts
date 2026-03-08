@@ -1,6 +1,6 @@
 import { DiavgeiaError, DiavgeiaTimeoutError } from './errors.js';
 import { paginate } from './paginate.js';
-import { buildUrl } from './utils.js';
+import { buildUrl, sleep } from './utils.js';
 import type {
   Organization,
   OrganizationDetails,
@@ -20,11 +20,16 @@ import type {
 
 const DEFAULT_BASE_URL = 'https://diavgeia.gov.gr';
 const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_RETRIES = 3;
+const RETRY_BASE_DELAY = 1000;
+const RETRYABLE_STATUS_CODES = [429, 502, 503, 504];
 
 export interface DiavgeiaConfig {
   baseUrl?: string;
   timeout?: number;
   fetch?: typeof globalThis.fetch;
+  /** Number of retries for transient errors (default 3, 0 to disable) */
+  retries?: number;
 }
 
 /**
@@ -38,36 +43,50 @@ export class Diavgeia {
   private readonly baseUrl: string;
   private readonly timeout: number;
   private readonly _fetch: typeof globalThis.fetch;
+  private readonly retries: number;
 
   constructor(config?: DiavgeiaConfig) {
     this.baseUrl = config?.baseUrl ?? DEFAULT_BASE_URL;
     this.timeout = config?.timeout ?? DEFAULT_TIMEOUT;
     this._fetch = config?.fetch ?? globalThis.fetch;
+    this.retries = config?.retries ?? DEFAULT_RETRIES;
   }
 
   // --- Internal helpers ---
 
   private async request<T>(basePath: string, path: string, params?: Record<string, string | number | undefined>): Promise<T> {
     const url = buildUrl(this.baseUrl, `${basePath}${path}`, params);
-    let response: Response;
 
-    try {
-      response = await this._fetch(url, {
-        headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(this.timeout),
-      });
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'TimeoutError') {
-        throw new DiavgeiaTimeoutError(url, this.timeout);
+    for (let attempt = 0; attempt <= this.retries; attempt++) {
+      let response: Response;
+
+      try {
+        response = await this._fetch(url, {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(this.timeout),
+        });
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'TimeoutError') {
+          throw new DiavgeiaTimeoutError(url, this.timeout);
+        }
+        throw err;
       }
-      throw err;
-    }
 
-    if (!response.ok) {
+      if (response.ok) {
+        return response.json() as Promise<T>;
+      }
+
+      if (RETRYABLE_STATUS_CODES.includes(response.status) && attempt < this.retries) {
+        const jitter = 0.5 + Math.random();
+        await sleep(RETRY_BASE_DELAY * Math.pow(2, attempt) * jitter);
+        continue;
+      }
+
       throw new DiavgeiaError(response.status, response.statusText, url);
     }
 
-    return response.json() as Promise<T>;
+    // unreachable — the loop always returns or throws
+    throw new Error('unreachable');
   }
 
   /** Fetch from /luminapi/opendata (structural endpoints) */

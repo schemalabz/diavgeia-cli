@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { msToDate, msToISODate, normalizeGreek, buildUrl } from './utils.js';
+import { describe, it, expect, vi } from 'vitest';
+import { msToDate, msToISODate, normalizeGreek, buildUrl, sleep } from './utils.js';
 
 describe('msToDate', () => {
   it('converts milliseconds to Date', () => {
@@ -44,6 +44,16 @@ describe('normalizeGreek', () => {
     const query = normalizeGreek('ζωγράφου');
     const label = normalizeGreek('ΔΗΜΟΣ ΖΩΓΡΑΦΟΥ');
     expect(label.includes(query)).toBe(true);
+  });
+});
+
+describe('sleep', () => {
+  it('resolves after the given delay', async () => {
+    vi.useFakeTimers();
+    const p = sleep(100);
+    vi.advanceTimersByTime(100);
+    await p;
+    vi.useRealTimers();
   });
 });
 

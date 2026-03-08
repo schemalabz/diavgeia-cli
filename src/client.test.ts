@@ -3,6 +3,11 @@ import { Diavgeia } from './client.js';
 import { DiavgeiaError, DiavgeiaTimeoutError } from './errors.js';
 import type { Decision, SearchResponse } from './types.js';
 
+vi.mock('./utils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./utils.js')>();
+  return { ...actual, sleep: vi.fn().mockResolvedValue(undefined) };
+});
+
 function makeDecision(overrides: Partial<Decision> = {}): Decision {
   return {
     ada: 'ΨΘ82ΩΡΦ-7ΑΙ',
@@ -414,6 +419,67 @@ describe('Diavgeia client', () => {
       fetchMock.mockReturnValueOnce(ok({ organizations: [] }));
       await custom.organizations();
       expect(calledUrl().origin).toBe('https://test3.diavgeia.gov.gr');
+    });
+  });
+
+  // --- Retry logic ---
+
+  describe('retry', () => {
+    it('retries on 502 then succeeds', async () => {
+      fetchMock
+        .mockReturnValueOnce(notOk(502, 'Bad Gateway'))
+        .mockReturnValueOnce(ok({ organizations: [] }));
+      const orgs = await client.organizations();
+      expect(orgs).toEqual([]);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries on 429, 503, 504', async () => {
+      for (const status of [429, 503, 504]) {
+        const fm = vi.fn()
+          .mockReturnValueOnce(notOk(status, 'Transient'))
+          .mockReturnValueOnce(ok({ organizations: [] }));
+        const c = new Diavgeia({ fetch: fm as unknown as typeof fetch });
+        await c.organizations();
+        expect(fm).toHaveBeenCalledTimes(2);
+      }
+    });
+
+    it('throws after max retries exhausted', async () => {
+      fetchMock
+        .mockReturnValue(notOk(502, 'Bad Gateway'));
+      await expect(client.organizations()).rejects.toThrow(DiavgeiaError);
+      // 1 initial + 3 retries = 4 total calls
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
+
+    it('does NOT retry 400, 404, 500', async () => {
+      for (const status of [400, 404, 500]) {
+        const fm = vi.fn().mockReturnValueOnce(notOk(status, 'Error'));
+        const c = new Diavgeia({ fetch: fm as unknown as typeof fetch });
+        await expect(c.organizations()).rejects.toThrow(DiavgeiaError);
+        expect(fm).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('does NOT retry timeouts', async () => {
+      const timeoutErr = new DOMException('The operation was aborted.', 'TimeoutError');
+      fetchMock.mockRejectedValueOnce(timeoutErr);
+      await expect(client.organizations()).rejects.toThrow(DiavgeiaTimeoutError);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT retry network errors', async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+      await expect(client.organizations()).rejects.toThrow(TypeError);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries: 0 disables retrying', async () => {
+      const fm = vi.fn().mockReturnValueOnce(notOk(502, 'Bad Gateway'));
+      const c = new Diavgeia({ fetch: fm as unknown as typeof fetch, retries: 0 });
+      await expect(c.organizations()).rejects.toThrow(DiavgeiaError);
+      expect(fm).toHaveBeenCalledTimes(1);
     });
   });
 });

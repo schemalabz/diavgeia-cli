@@ -20,6 +20,13 @@ export function normalizeGreek(s: string): string {
 }
 
 /**
+ * Sleep for the given number of milliseconds.
+ */
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Build a URL with query parameters, omitting undefined/null values.
  */
 export function buildUrl(base: string, path: string, params?: Record<string, string | number | undefined>): string {
