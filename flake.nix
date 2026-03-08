@@ -22,14 +22,18 @@
           buildInputs = [
             pkgs.nodejs
             pkgs.nodePackages.npm
+            pkgs.poppler_utils
+            pkgs.python3
           ];
 
           shellHook = ''
             echo ""
             echo "Inside diavgeia-cli Nix dev shell"
             echo ""
-            echo "  node $(node --version)"
-            echo "  npm  $(npm --version)"
+            echo "  node      $(node --version)"
+            echo "  npm       $(npm --version)"
+            echo "  pdftotext $(pdftotext -v 2>&1 | head -1)"
+            echo "  python    $(python3 --version)"
             echo ""
             echo "Run 'npm install' then 'npm test' to run tests."
           '';

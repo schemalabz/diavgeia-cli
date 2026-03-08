@@ -1,5 +1,5 @@
 {
-  "name": "diavgeia-cli",
+  "name": "@schemalabs/diavgeia-cli",
   "version": "0.1.0",
   "description": "TypeScript client and CLI for the Diavgeia (Greek Government Transparency) API",
   "type": "module",
