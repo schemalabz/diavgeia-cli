@@ -1,5 +1,6 @@
 import type { Decision, Organization, Unit, Signer, Position, DecisionType, Dictionary, DictionaryItem, Term, VersionLogEntry } from '../../types.js';
 import { msToISODate } from '../../utils.js';
+import { extractAmount, handledAmountFields } from '../../extract.js';
 
 /** Whether stdout is a TTY (interactive terminal) */
 const isTTY = typeof process !== 'undefined' && process.stdout?.isTTY === true;
@@ -23,6 +24,14 @@ export function output(data: unknown, formatter?: (data: unknown) => string): vo
   } else {
     console.log(JSON.stringify(data, null, 2));
   }
+}
+
+// --- Amount formatting ---
+
+function formatAmount(amount: number, currency: string): string {
+  const formatted = amount.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const symbol = currency === 'EUR' ? '€' : currency;
+  return `${formatted} ${symbol}`;
 }
 
 // --- Formatters ---
@@ -109,16 +118,15 @@ export function formatDecision(d: Decision): string {
       lines.push(`    FEK:        ${fek.aa ?? ''}/${fek.issue ?? ''}/${fek.issueyear ?? ''}`);
     }
 
-    // Financial amount
-    if (extra.financialAmount != null && extra.financialAmount !== '') {
-      const amount = Number(extra.financialAmount);
-      const formatted = isNaN(amount) ? String(extra.financialAmount) : amount.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      lines.push(`    Amount:     ${formatted}`);
+    // Financial amount (type-specific extraction)
+    const extracted = extractAmount(extra);
+    if (extracted) {
+      lines.push(`    Amount:     ${formatAmount(extracted.amount, extracted.currency)}`);
     }
 
-    // Other extra fields
+    // Other extra fields (skip structured amount fields already handled above)
     for (const [key, value] of Object.entries(extra)) {
-      if (key === 'fek' || key === 'financialAmount') continue;
+      if (handledAmountFields.has(key)) continue;
       if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) continue;
       if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0) continue;
       const display = typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -129,10 +137,22 @@ export function formatDecision(d: Decision): string {
   return lines.join('\n');
 }
 
+/** Format a single decision as a table row: ADA  DATE  TYPE  AMOUNT  SUBJECT */
+export function formatDecisionLine(d: Decision): string {
+  const ada = d.ada.padEnd(16);
+  const date = msToISODate(d.issueDate);
+  const type = (d.decisionTypeId ?? '').padEnd(7);
+  const extra = d.extraFieldValues;
+  const extracted = extra ? extractAmount(extra) : null;
+  const amount = extracted ? formatAmount(extracted.amount, extracted.currency).padStart(14) : ''.padStart(14);
+  const subject = d.subject.substring(0, 60);
+  return `  ${ada} ${date}  ${type} ${amount}  ${subject}`;
+}
+
 export function formatSearchResults(decisions: Decision[], total: number, page: number): string {
   const lines = [`${total} results (page ${page}):\n`];
   for (const d of decisions) {
-    lines.push(`  ${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${(d.decisionTypeId ?? '').padEnd(7)} ${d.subject.substring(0, 72)}`);
+    lines.push(formatDecisionLine(d));
   }
   return lines.join('\n');
 }

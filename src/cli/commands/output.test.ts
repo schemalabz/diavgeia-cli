@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDecision, formatSearchResults } from './output.js';
+import { formatDecision, formatSearchResults, formatDecisionLine } from './output.js';
 import type { Decision } from '../../types.js';
 
 function makeDecision(overrides: Partial<Decision> = {}): Decision {
@@ -46,14 +46,27 @@ describe('formatDecision', () => {
     expect(result).toContain('FEK:        42/Β/2024');
   });
 
-  it('shows financial amount formatted', () => {
+  it('shows amount from amountWithVAT (Β.1.3)', () => {
     const result = formatDecision(makeDecision({
       extraFieldValues: {
-        financialAmount: 15000.5,
+        amountWithVAT: { amount: 15000.50, currency: 'EUR' },
       },
     }));
     expect(result).toContain('Extra fields:');
     expect(result).toMatch(/Amount:\s+15/);
+    expect(result).toContain('€');
+  });
+
+  it('shows summed amount from sponsor array (Β.2.2)', () => {
+    const result = formatDecision(makeDecision({
+      extraFieldValues: {
+        sponsor: [
+          { expenseAmount: { amount: 1000, currency: 'EUR' } },
+          { expenseAmount: { amount: 2000, currency: 'EUR' } },
+        ],
+      },
+    }));
+    expect(result).toMatch(/Amount:\s+3/);
   });
 
   it('shows no extra section when extraFieldValues is empty', () => {
@@ -70,14 +83,14 @@ describe('formatDecision', () => {
     expect(result).toContain('relatedDecisions: ΑΒΓ-123');
   });
 
-  it('skips null/empty extra field values', () => {
+  it('skips null/empty extra field values and handled amount fields', () => {
     const result = formatDecision(makeDecision({
       extraFieldValues: {
         emptyStr: '',
         nullVal: null,
         emptyArr: [],
         emptyObj: {},
-        financialAmount: 100,
+        amountWithVAT: { amount: 100, currency: 'EUR' },
       },
     }));
     expect(result).not.toContain('emptyStr');
@@ -85,6 +98,27 @@ describe('formatDecision', () => {
     expect(result).not.toContain('emptyArr');
     expect(result).not.toContain('emptyObj');
     expect(result).toContain('Amount:');
+    // amountWithVAT should not appear as raw JSON in extra fields
+    expect(result).not.toMatch(/amountWithVAT.*\{/);
+  });
+});
+
+describe('formatDecisionLine', () => {
+  it('includes amount when present', () => {
+    const d = makeDecision({
+      extraFieldValues: { awardAmount: { amount: 5000, currency: 'EUR' } },
+    });
+    const line = formatDecisionLine(d);
+    expect(line).toContain('ΨΘ82ΩΡΦ-7ΑΙ');
+    expect(line).toContain('5.000,00');
+    expect(line).toContain('€');
+  });
+
+  it('shows blank amount column when no amount', () => {
+    const d = makeDecision();
+    const line = formatDecisionLine(d);
+    expect(line).toContain('ΨΘ82ΩΡΦ-7ΑΙ');
+    expect(line).not.toContain('€');
   });
 });
 
@@ -103,5 +137,19 @@ describe('formatSearchResults', () => {
     const result = formatSearchResults([makeDecision()], 1, 0);
     expect(result).toContain('ΨΘ82ΩΡΦ-7ΑΙ');
     expect(result).toContain('2024-12-19');
+  });
+
+  it('includes amount in search results when present', () => {
+    const d = makeDecision({
+      extraFieldValues: { awardAmount: { amount: 12345.67, currency: 'EUR' } },
+    });
+    const result = formatSearchResults([d], 1, 0);
+    expect(result).toContain('12.345,67');
+    expect(result).toContain('€');
+  });
+
+  it('shows blank amount column in search results when no amount', () => {
+    const result = formatSearchResults([makeDecision()], 1, 0);
+    expect(result).not.toContain('€');
   });
 });

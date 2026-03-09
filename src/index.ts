@@ -1,6 +1,8 @@
 export { Diavgeia } from './client.js';
 export type { DiavgeiaConfig } from './client.js';
 export { DiavgeiaError, DiavgeiaTimeoutError } from './errors.js';
+export { extractAmount, enrichDecision } from './extract.js';
+export type { ExtractedAmount } from './extract.js';
 export { msToDate, msToISODate, normalizeGreek, sleep } from './utils.js';
 export type {
   Organization,

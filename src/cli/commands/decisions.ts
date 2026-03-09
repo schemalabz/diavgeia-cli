@@ -3,6 +3,7 @@ import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Diavgeia } from '../../client.js';
 import { output, formatDecision, formatVersionLog, handleError } from './output.js';
+import { enrichDecision } from '../../extract.js';
 
 export function registerDecisionsCommand(program: Command, client: Diavgeia): void {
   const decisions = program
@@ -15,7 +16,7 @@ export function registerDecisionsCommand(program: Command, client: Diavgeia): vo
     .action(async (ada: string) => {
       try {
         const result = await client.decision(ada);
-        output(result, (data) => formatDecision(data as typeof result));
+        output(enrichDecision(result), (data) => formatDecision(data as typeof result));
       } catch (err) {
         handleError(err);
       }
@@ -27,7 +28,7 @@ export function registerDecisionsCommand(program: Command, client: Diavgeia): vo
     .action(async (versionId: string) => {
       try {
         const result = await client.decisionVersion(versionId);
-        output(result, (data) => formatDecision(data as typeof result));
+        output(enrichDecision(result), (data) => formatDecision(data as typeof result));
       } catch (err) {
         handleError(err);
       }

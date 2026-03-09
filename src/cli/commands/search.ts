@@ -1,8 +1,9 @@
 import { Command } from 'commander';
 import type { Diavgeia } from '../../client.js';
 import type { SearchParams, Decision } from '../../types.js';
-import { output, formatSearchResults, shouldJson, handleError } from './output.js';
-import { msToISODate, sleep } from '../../utils.js';
+import { output, formatSearchResults, formatDecisionLine, shouldJson, handleError } from './output.js';
+import { enrichDecision } from '../../extract.js';
+import { sleep } from '../../utils.js';
 
 /**
  * Split a date range into non-overlapping windows of at most maxDays.
@@ -200,10 +201,10 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
             }
 
             if (shouldJson()) {
-              console.log(JSON.stringify(all, null, 2));
+              console.log(JSON.stringify(all.map(enrichDecision), null, 2));
             } else {
               for (const d of all) {
-                console.log(`${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
+                console.log(formatDecisionLine(d));
               }
               console.log(`\n${all.length} total results`);
             }
@@ -211,7 +212,8 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
             await streamAdvancedAll(client, advancedQuery, size);
           } else {
             const result = await client.searchAdvanced({ q: advancedQuery, page, size });
-            output(result, (data) => {
+            const enriched = { ...result, decisions: result.decisions.map(enrichDecision) };
+            output(enriched, (data) => {
               const r = data as typeof result;
               return formatSearchResults(r.decisions, r.info.total, r.info.page);
             });
@@ -266,10 +268,10 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
           }
 
           if (shouldJson()) {
-            console.log(JSON.stringify(all, null, 2));
+            console.log(JSON.stringify(all.map(enrichDecision), null, 2));
           } else {
             for (const d of all) {
-              console.log(`${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
+              console.log(formatDecisionLine(d));
             }
             console.log(`\n${all.length} total results`);
           }
@@ -277,7 +279,8 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
           await streamAll(client, params);
         } else {
           const result = await client.search(params);
-          output(result, (data) => {
+          const enriched = { ...result, decisions: result.decisions.map(enrichDecision) };
+          output(enriched, (data) => {
             const r = data as typeof result;
             return formatSearchResults(r.decisions, r.info.total, r.info.page);
           });
@@ -303,7 +306,8 @@ export function registerSearchCommand(program: Command, client: Diavgeia): void 
             page: parseInt(opts.page, 10),
             size: parseInt(opts.size, 10),
           });
-          output(result, (data) => {
+          const enriched = { ...result, decisions: result.decisions.map(enrichDecision) };
+          output(enriched, (data) => {
             const r = data as typeof result;
             return formatSearchResults(r.decisions, r.info.total, r.info.page);
           });
@@ -344,10 +348,10 @@ async function streamAdvancedAll(client: Diavgeia, q: string, size: number): Pro
   }
 
   if (shouldJson()) {
-    console.log(JSON.stringify(all, null, 2));
+    console.log(JSON.stringify(all.map(enrichDecision), null, 2));
   } else {
     for (const d of all) {
-      console.log(`${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
+      console.log(formatDecisionLine(d));
     }
     console.log(`\n${all.length} total results`);
   }
@@ -362,10 +366,10 @@ async function streamAll(client: Diavgeia, params: SearchParams): Promise<void> 
   }
 
   if (shouldJson()) {
-    console.log(JSON.stringify(all, null, 2));
+    console.log(JSON.stringify(all.map(enrichDecision), null, 2));
   } else {
     for (const d of all) {
-      console.log(`${d.ada.padEnd(16)} ${msToISODate(d.issueDate)}  ${d.subject.substring(0, 80)}`);
+      console.log(formatDecisionLine(d));
     }
     console.log(`\n${all.length} total results`);
   }
