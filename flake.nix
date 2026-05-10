@@ -60,12 +60,18 @@
             cp -r node_modules $out/lib/diavgeia-cli/
             cp package.json $out/lib/diavgeia-cli/
 
-            # Create wrapper script
+            # Create wrapper scripts
             cat > $out/bin/diavgeia <<'EOF'
 #!/usr/bin/env bash
 exec ${pkgs.nodejs}/bin/node "$(dirname "$(readlink -f "$0")")/../lib/diavgeia-cli/dist/cli/index.js" "$@"
 EOF
             chmod +x $out/bin/diavgeia
+
+            cat > $out/bin/diavgeia-mcp <<'EOF'
+#!/usr/bin/env bash
+exec ${pkgs.nodejs}/bin/node "$(dirname "$(readlink -f "$0")")/../lib/diavgeia-cli/dist/mcp/index.js" "$@"
+EOF
+            chmod +x $out/bin/diavgeia-mcp
 
             runHook postInstall
           '';

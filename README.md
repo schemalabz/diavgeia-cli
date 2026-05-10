@@ -1,22 +1,69 @@
 # diavgeia-cli
 
-TypeScript client and CLI for the [Diavgeia](https://diavgeia.gov.gr) (Greek Government Transparency) API. Access 71+ million government decisions from every Greek institution since 2010.
+TypeScript client, CLI, and MCP server for the [Diavgeia](https://diavgeia.gov.gr) (Greek Government Transparency) API. Access 71+ million government decisions from every Greek institution since 2010.
 
-- **Library**: Zero-dependency TypeScript client with full type coverage
+- **MCP Server**: Use with Claude Desktop, Claude Code, Cursor, or any MCP-compatible AI agent — ask questions in natural language
 - **CLI**: Search, browse organizations, look up decisions — from your terminal
-- **Pagination**: Async generators for streaming through large result sets
+- **Library**: TypeScript client with full type coverage for building your own tools
 - **Dual format**: Ships ESM + CJS with TypeScript declarations
 
-## Install
+## Use with AI agents (MCP)
+
+The fastest way to explore Greek government data: connect to an AI agent and just ask questions in Greek.
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `~/.config/Claude/claude_desktop_config.json` (Linux):
+
+```json
+{
+  "mcpServers": {
+    "diavgeia": {
+      "command": "npx",
+      "args": ["-y", "-p", "@schemalabs/diavgeia-cli", "diavgeia-mcp"]
+    }
+  }
+}
+```
+
+### Claude Code
 
 ```bash
-npm install diavgeia-cli
+claude mcp add diavgeia -- npx -y -p @schemalabs/diavgeia-cli diavgeia-mcp
+```
+
+### What you can ask
+
+Once connected, just ask in natural language:
+
+- "Τι αποφάσισε ο δήμος Χαλανδρίου για τα σχολεία τον Μάρτιο 2026;"
+- "Βρες συμβάσεις πάνω από 100.000€ στο υπουργείο Παιδείας"
+- "Ποιες αποφάσεις βγήκαν για το κυλικείο του 12ου δημοτικού;"
+- "Δώσε μου το PDF της απόφασης 9Β3ΘΩΗΔ-ΚΝΑ"
+
+The AI agent handles organization lookup, date ranges, search queries, and pagination automatically.
+
+### Available tools
+
+| Tool | Description |
+|------|-------------|
+| `search_organizations` | Find government bodies by name (municipalities, ministries, etc.) |
+| `search_decisions` | Search decisions by org, date, subject, amount, content |
+| `get_decision` | Get full details for a decision by ADA |
+| `get_organization_units` | List departments within an organization |
+| `list_decision_types` | Browse decision type categories |
+| `get_document_url` | Get PDF and web page links for a decision |
+
+## Install (CLI)
+
+```bash
+npm install -g @schemalabs/diavgeia-cli
 ```
 
 Or use directly with npx:
 
 ```bash
-npx diavgeia-cli search query --org 6104 --from 2024-12-01 --to 2024-12-31
+npx @schemalabs/diavgeia-cli search query --org 6104 --from 2024-12-01 --to 2024-12-31
 ```
 
 ## Library usage

@@ -16,4 +16,12 @@ export default defineConfig([
     banner: { js: '#!/usr/bin/env node' },
     sourcemap: true,
   },
+  {
+    entry: ['src/mcp/index.ts'],
+    outDir: 'dist/mcp',
+    format: ['esm'],
+    banner: { js: '#!/usr/bin/env node' },
+    sourcemap: true,
+    noExternal: ['@modelcontextprotocol/sdk', 'zod'],
+  },
 ]);
